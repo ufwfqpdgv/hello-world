@@ -13,6 +13,7 @@ enum interceptKeyEnum {
     case next_pass //因如果直接 pass ，最后一字符还是会传到当前激活 app 中
     case stop
 }
+//todo interceptKey这个应该都没啥用，写完可以删掉
 var interceptKey = interceptKeyEnum.pass
 var startGlobalMotion=false
 let charDict = intCharList()
@@ -46,7 +47,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.startDealKey()
         
         /*
-        //todoing
         NSEvent.addGlobalMonitorForEvents(matching: [.keyDown], handler: {event in
             // ctrl+shift+command+a启动
             
@@ -81,11 +81,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         })
         */
  
+        /*
         NotificationCenter.default.addObserver(self, selector: #selector(getModifier(_:)), name: NSNotification.Name("global_motion"), object: nil)
+        */
         
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: {_ in
-            //todo 调试完记得打开
-            //self.clean()
+            self.clean()
             interceptKey=interceptKeyEnum.pass
         })
     }
@@ -149,6 +150,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /*
     // 监听全局按键，用于启动
     @objc func getModifier(_ noti:Notification) {
         let eventTemp = noti.object as! CGEvent  //异常后这里就就再也接不到消息了
@@ -159,7 +161,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let event=NSEvent(cgEvent: eventTemp)
         
-        //todo bug 这里会崩溃，怎么搞？debug 的时候，所有程序都会崩--在下面startDealKey中                    sleep(1) 也会崩，只有有延迟就崩？事件失效了？--shit,只要一卡就出事，不管是哪个 app 里
+        //bug 这里会崩溃，怎么搞？debug 的时候，所有程序都会崩--在下面startDealKey中                    sleep(1) 也会崩，只有有延迟就崩？事件失效了？--shit,只要一卡就出事，不管是哪个 app 里
         
         // ctrl+shift+command+a启动
         if event?.modifierFlags.rawValue == 1442059 && event?.characters=="\u{01}"{
@@ -183,29 +185,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             dealKey(char)
         }
     }
+ */
     
     func applicationWillTerminate(_ aNotification: Notification) {
         // Insert code here to tear down your application
     }
     
-    
-    // 不传递了，直接在这里处理及转换
+    // 不传递了，直接在这里处理及转换--这才是能行的，？？？
     func startDealKey(){
         let eventTap:CFMachPort = CGEvent.tapCreate(
             tap: .cghidEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: 1 << CGEventType.keyDown.rawValue,
-            callback: {(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, refcon: UnsafeMutableRawPointer?)->Unmanaged<CGEvent>?  in
+            callback: {(proxy: CGEventTapProxy, type: CGEventType, _event: CGEvent, refcon: UnsafeMutableRawPointer?)->Unmanaged<CGEvent>?  in
                 
-                guard let event=NSEvent(cgEvent: event) else{
+                // 太久会超时，本CFRunLoopRun会崩，直接重开一个就可以继续用了
+                if _event.timestamp==0{
+                    s.startDealKey()
+                    return nil
+                }
+                
+                guard let event=NSEvent(cgEvent: _event) else{
                     startGlobalMotion=false
                     return nil
                 }
                 // ctrl+shift+command+a启动
-                //self.printLog(event.modifierFlags.rawValue)
-                s.printLog(event.characters)
-                
                 if event.modifierFlags.rawValue == 1442059 && event.characters=="\u{01}"{
                     s.printLog("开始")
                     s.clean()
@@ -215,68 +220,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     return nil
                 }
                 if startGlobalMotion{
-                    //let charTemp = self.conversionChar(event.characters!)
-                    let key=Int(bitPattern: event.modifierFlags.rawValue)
-                    let charTemp = charDict[key]
-                    s.printLog(charTemp)
-                    
-                    guard let char = charTemp else{
+                    guard let char = event.characters else{
                         s.clean()
                         return nil
                     }
-                    if self.cancel(char) || !self.neededKey(char){
+                    
+                    if s.cancel(char) || !s.neededKey(char){
                         s.clean()
                         interceptKey=interceptKeyEnum.next_pass
                         return nil
                     }
                     s.dealKey(char)
-                }
-                
-                
-                return nil
-                /*
-                if startGlobalMotion{
-                    if interceptKey==interceptKeyEnum.next_pass{
-                        return nil
-                    }
-                    
-                    guard let nsEvent=NSEvent(cgEvent: event) else{
-                        startGlobalMotion=false
-                        return nil
-                    }
-                    for (k,v) in charDict{
-                        if v==nsEvent.characters{
-                            event.flags=CGEventFlags(rawValue: UInt64(k))
-                            break
-                        }
-                    }
-                    // esc esc，因为能设为空，esc 暂是影响最小的值了，就二级菜单可能用不了全局定位了
-                    let c = "\u{1B}"
-                    let utf16Chars = Array(c.utf16)
-                    event.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
-                    
-                    /*
-                     guard let nsEvent2=NSEvent(cgEvent: event) else{
-                     startGlobalMotion=false
-                     return nil
-                     }
-                     print(nsEvent2.characters)
-                     print(nsEvent2.modifierFlags.rawValue)
-                     */
-                }
-                
-                return Unmanaged.passRetained(event)
-                
-                switch interceptKey{
-                case .pass:
-                    return Unmanaged.passRetained(event)
-                case .next_pass:
-                    interceptKey = .pass
-                    return nil
-                case .stop:
                     return nil
                 }
-                */
+                
+                return Unmanaged.passRetained(_event)
         },
             userInfo: nil)!
         
@@ -289,7 +247,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     /*
-    //todoing 改成四大组合键加原本按键，这样就不会触发其他了，就不用消息传递和拦截按键了--但这样为什么一执行就直接回收一堆窗口？rlg
+    // 改成四大组合键加原本按键，这样就不会触发其他了，就不用消息传递和拦截按键了--但这样为什么一执行就直接回收一堆窗口？rlg
     func startDealKey(){
         let eventTap:CFMachPort = CGEvent.tapCreate(
             tap: .cghidEventTap,
@@ -698,18 +656,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func markElement(_ rect:NSRect,_ key:String)->NSWindowController{
-        /*
-         let width=CGFloat(23.0),height=CGFloat(20.0)
+        
+         let width=CGFloat(30.0),height=CGFloat(20.0)
          let x=rect.midX-width/2
          let y=screenRect.width-rect.midY-height/2
          let win=NSWindow(contentRect: NSRect(x: x, y: y, width: width, height: height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
-         */
-        
+ 
+        /*
         //todo 暂只是测试，把标记设为整块
         let x=rect.minX
         let y=screenRect.width-rect.maxY
         let win=NSWindow(contentRect: NSRect(x: x, y: y, width: rect.width, height: rect.height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
-        
+         */
         let field=NSTextField(frame: win.frame)
         field.backgroundColor=NSColor(calibratedRed: 1, green: 1, blue: 0, alpha: 0.6)
         field.isEditable=false
