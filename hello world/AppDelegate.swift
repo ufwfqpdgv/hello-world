@@ -15,6 +15,8 @@ enum interceptKeyEnum {
 }
 var interceptKey = interceptKeyEnum.pass
 var startGlobalMotion=false
+let charDict = intCharList()
+var s=AppDelegate()
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -27,7 +29,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var element: AXUIElement
         var rect : NSRect
     }
-    lazy var charDict = intCharList()
     //这里一定要写外面才 ok，奇了，并跨屏幕也是 ok 的，就写外面吧--双屏横竖通用，nb
     let screenRect=NSScreen.main!.frame
     var elementList:[elementStruct] = []
@@ -41,15 +42,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Insert code here to initialize your application
         
+        s=self
         self.startDealKey()
         
-        /* //todoing
+        /*
+        //todoing
         NSEvent.addGlobalMonitorForEvents(matching: [.keyDown], handler: {event in
             // ctrl+shift+command+a启动
             
             //self.printLog(event.modifierFlags.rawValue)
             self.printLog(event.characters)
-
             
             if event.modifierFlags.rawValue == 1442059 && event.characters=="\u{01}"{
                 self.printLog("开始")
@@ -60,7 +62,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             if startGlobalMotion{
-                let charTemp = self.conversionChar(event.characters!)
+                //let charTemp = self.conversionChar(event.characters!)
+                let key=Int(bitPattern: event.modifierFlags.rawValue)
+                let charTemp = charDict[key]
                 self.printLog(charTemp)
                 
                 guard let char = charTemp else{
@@ -75,11 +79,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.dealKey(char)
             }
         })
- */
+        */
  
         NotificationCenter.default.addObserver(self, selector: #selector(getModifier(_:)), name: NSNotification.Name("global_motion"), object: nil)
         
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: {_ in
+            //todo 调试完记得打开
             //self.clean()
             interceptKey=interceptKeyEnum.pass
         })
@@ -142,34 +147,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         default:
             return input
         }
-        
-        let charDict:[Int:String]=[0:"a",
-                                   1:"b",
-                                   2:"c",
-                                   3:"d",
-                                   4:"e",
-                                   5:"f",
-                                   6:"g",
-                                   7:"h",
-                                   8:"i",
-                                   9:"j",
-                                   10:"k",
-                                   11:"l",
-                                   12:"m",
-                                   13:"n",
-                                   14:"o",
-                                   15:"p",
-                                   16:"q",
-                                   17:"r",
-                                   18:"s",
-                                   19:"t",
-                                   20:"u",
-                                   21:"v",
-                                   22:"w",
-                                   23:"x",
-                                   24:"y",
-                                   25:"z",
-                                   ]
     }
 
     // 监听全局按键，用于启动
@@ -211,6 +188,106 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Insert code here to tear down your application
     }
     
+    
+    // 不传递了，直接在这里处理及转换
+    func startDealKey(){
+        let eventTap:CFMachPort = CGEvent.tapCreate(
+            tap: .cghidEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: 1 << CGEventType.keyDown.rawValue,
+            callback: {(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, refcon: UnsafeMutableRawPointer?)->Unmanaged<CGEvent>?  in
+                
+                guard let event=NSEvent(cgEvent: event) else{
+                    startGlobalMotion=false
+                    return nil
+                }
+                // ctrl+shift+command+a启动
+                //self.printLog(event.modifierFlags.rawValue)
+                s.printLog(event.characters)
+                
+                if event.modifierFlags.rawValue == 1442059 && event.characters=="\u{01}"{
+                    s.printLog("开始")
+                    s.clean()
+                    s.dealCurrentActiveWindow()
+                    interceptKey=interceptKeyEnum.stop
+                    startGlobalMotion=true
+                    return nil
+                }
+                if startGlobalMotion{
+                    //let charTemp = self.conversionChar(event.characters!)
+                    let key=Int(bitPattern: event.modifierFlags.rawValue)
+                    let charTemp = charDict[key]
+                    s.printLog(charTemp)
+                    
+                    guard let char = charTemp else{
+                        s.clean()
+                        return nil
+                    }
+                    if self.cancel(char) || !self.neededKey(char){
+                        s.clean()
+                        interceptKey=interceptKeyEnum.next_pass
+                        return nil
+                    }
+                    s.dealKey(char)
+                }
+                
+                
+                return nil
+                /*
+                if startGlobalMotion{
+                    if interceptKey==interceptKeyEnum.next_pass{
+                        return nil
+                    }
+                    
+                    guard let nsEvent=NSEvent(cgEvent: event) else{
+                        startGlobalMotion=false
+                        return nil
+                    }
+                    for (k,v) in charDict{
+                        if v==nsEvent.characters{
+                            event.flags=CGEventFlags(rawValue: UInt64(k))
+                            break
+                        }
+                    }
+                    // esc esc，因为能设为空，esc 暂是影响最小的值了，就二级菜单可能用不了全局定位了
+                    let c = "\u{1B}"
+                    let utf16Chars = Array(c.utf16)
+                    event.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
+                    
+                    /*
+                     guard let nsEvent2=NSEvent(cgEvent: event) else{
+                     startGlobalMotion=false
+                     return nil
+                     }
+                     print(nsEvent2.characters)
+                     print(nsEvent2.modifierFlags.rawValue)
+                     */
+                }
+                
+                return Unmanaged.passRetained(event)
+                
+                switch interceptKey{
+                case .pass:
+                    return Unmanaged.passRetained(event)
+                case .next_pass:
+                    interceptKey = .pass
+                    return nil
+                case .stop:
+                    return nil
+                }
+                */
+        },
+            userInfo: nil)!
+        
+        let runLoopSource:CFRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0);
+        
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, CFRunLoopMode.commonModes);
+        CGEvent.tapEnable(tap: eventTap, enable: true);
+        
+        CFRunLoopRun();
+    }
+    
     /*
     //todoing 改成四大组合键加原本按键，这样就不会触发其他了，就不用消息传递和拦截按键了--但这样为什么一执行就直接回收一堆窗口？rlg
     func startDealKey(){
@@ -220,11 +297,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             options: .defaultTap,
             eventsOfInterest: 1 << CGEventType.keyDown.rawValue,
             callback: {(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, refcon: UnsafeMutableRawPointer?)->Unmanaged<CGEvent>?  in
-                
-                print(event.flags)
-                
+
                 if startGlobalMotion{
-                    event.flags=CGEventFlags(rawValue: 1966379)
+                    if interceptKey==interceptKeyEnum.next_pass{
+                        return nil
+                    }
+                    
+                    guard let nsEvent=NSEvent(cgEvent: event) else{
+                        startGlobalMotion=false
+                        return nil
+                    }
+                    for (k,v) in charDict{
+                        if v==nsEvent.characters{
+                            event.flags=CGEventFlags(rawValue: UInt64(k))
+                            break
+                        }
+                    }
+                    // esc esc，因为能设为空，esc 暂是影响最小的值了，就二级菜单可能用不了全局定位了
+                    let c = "\u{1B}"
+                    let utf16Chars = Array(c.utf16)
+                    event.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
+
+                    /*
+                    guard let nsEvent2=NSEvent(cgEvent: event) else{
+                        startGlobalMotion=false
+                        return nil
+                    }
+                    print(nsEvent2.characters)
+                    print(nsEvent2.modifierFlags.rawValue)
+                    */
                 }
 
                 return Unmanaged.passRetained(event)
@@ -250,6 +351,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     */
     
+    /*
      func startDealKey(){
      // 拦截键盘事件，不过好像这个甚至在上面执行之前，难道设个标记啥的让上面先触发 ok 吗，后面再搞
      // 可能通过事件的方式只给自己 app 传事件，其他的都不传，app 结束后再置为给所有人传
@@ -280,7 +382,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
      
      CFRunLoopRun();
      }
-     
+     */
     
     func neededKey(_ char:String)->Bool{
         for (_,v) in charDict{
@@ -444,37 +546,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         //3、回头根据全局按键响应相应处理--在顶上
         return
-    }
-    
-    func intCharList()->[Int:String]{
-        let charDict:[Int:String]=[0:"a",
-                                   1:"b",
-                                   2:"c",
-                                   3:"d",
-                                   4:"e",
-                                   5:"f",
-                                   6:"g",
-                                   7:"h",
-                                   8:"i",
-                                   9:"j",
-                                   10:"k",
-                                   11:"l",
-                                   12:"m",
-                                   13:"n",
-                                   14:"o",
-                                   15:"p",
-                                   16:"q",
-                                   17:"r",
-                                   18:"s",
-                                   19:"t",
-                                   20:"u",
-                                   21:"v",
-                                   22:"w",
-                                   23:"x",
-                                   24:"y",
-                                   25:"z",
-                                   ]
-        return charDict
     }
     
     func findStandardWindow(_ element:AXUIElement)->[AXUIElement]?{
@@ -714,4 +785,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return 0
     }
+}
+
+func intCharList()->[Int:String]{
+    let charDict:[Int:String]=[0:"a",
+                               1:"b",
+                               2:"c",
+                               3:"d",
+                               4:"e",
+                               5:"f",
+                               6:"g",
+                               7:"h",
+                               8:"i",
+                               9:"j",
+                               10:"k",
+                               11:"l",
+                               12:"m",
+                               13:"n",
+                               14:"o",
+                               15:"p",
+                               16:"q",
+                               17:"r",
+                               18:"s",
+                               19:"t",
+                               20:"u",
+                               21:"v",
+                               22:"w",
+                               23:"x",
+                               24:"y",
+                               25:"z",
+                               ]
+    return charDict
 }
