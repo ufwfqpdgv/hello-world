@@ -230,7 +230,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         interceptKey=interceptKeyEnum.next_pass
                         return nil
                     }
+                    
+                    s.printLog(Date().timeIntervalSince1970)
+                    
                     s.dealKey(char)
+                    
+                    s.printLog(Date().timeIntervalSince1970)
+                    
+
                     return nil
                 }
                 
@@ -389,15 +396,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             interceptKey=interceptKeyEnum.next_pass
         }
         
+        printLog(Date().timeIntervalSince1970)
+
         for(key,value) in markDict{
             if !key.hasPrefix(char){
                 value.controller.close()
             }
         }
+        printLog(Date().timeIntervalSince1970)
+
         
     }
     
     func clean(){
+        
+        printLog(Date().timeIntervalSince1970)
+        
+
         startGlobalMotion=false
         if markDict.count==0{
             return
@@ -408,6 +423,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             value.controller.close()
         }
         
+        printLog(Date().timeIntervalSince1970)
+        
+
         /*
          // 多线程关窗口，加速速度--但跟上面没啥速度差，2333
          let group = DispatchGroup()
@@ -428,6 +446,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     //let systemAXElement = AXUIElementCreateSystemWide()
     func dealCurrentActiveWindow(){
+        
+        printLog(Date().timeIntervalSince1970)
+        
         let trusted = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
         let privOptions = [trusted: false] as CFDictionary
         let accessEnabled = AXIsProcessTrustedWithOptions(privOptions)
@@ -471,6 +492,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         printLog(elementList.count)
         
+        printLog(Date().timeIntervalSince1970)
+        
+
         //2、26及以下只用单个词标记，以上根据 /26后的数量，如为3则用 a？ b？ c？ 加 d e f g h i j
         let int=elementList.count/26
         var i=0,j=0
@@ -502,6 +526,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
+        printLog(Date().timeIntervalSince1970)
+        
+
         //3、回头根据全局按键响应相应处理--在顶上
         return
     }
@@ -663,7 +690,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
          let win=NSWindow(contentRect: NSRect(x: x, y: y, width: width, height: height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
  
         /*
-        //todo 暂只是测试，把标记设为整块
+        // 暂只是测试，把标记设为整块
         let x=rect.minX
         let y=screenRect.width-rect.maxY
         let win=NSWindow(contentRect: NSRect(x: x, y: y, width: rect.width, height: rect.height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
@@ -681,6 +708,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         win.level=NSWindow.Level.floating
         let controller = NSWindowController(window: win)
         controller.showWindow(self)
+        controller.close()
+        //win.makeKeyAndOrderFront(win)
+        //win.close()
         return controller
     }
     
