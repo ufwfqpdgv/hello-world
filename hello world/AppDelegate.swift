@@ -23,7 +23,6 @@ var s=AppDelegate()
 class AppDelegate: NSObject, NSApplicationDelegate {
     struct markStruct{
         var element: AXUIElement
-        var controller : NSWindowController
         var rect : NSRect
     }
     struct elementStruct{
@@ -226,20 +225,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         s.clean()
                         return nil
                     }
-                    
                     if s.cancel(char) || !s.neededKey(char){
                         s.clean()
                         interceptKey=interceptKeyEnum.next_pass
                         return nil
                     }
-                    
-                    s.printLog(Date().timeIntervalSince1970)
-                    
                     s.dealKey(char)
-                    
-                    s.printLog(Date().timeIntervalSince1970)
-                    
-
                     return nil
                 }
                 
@@ -254,69 +245,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         CFRunLoopRun();
     }
-    
-    /*
-    // 改成四大组合键加原本按键，这样就不会触发其他了，就不用消息传递和拦截按键了--但这样为什么一执行就直接回收一堆窗口？rlg
-    func startDealKey(){
-        let eventTap:CFMachPort = CGEvent.tapCreate(
-            tap: .cghidEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: 1 << CGEventType.keyDown.rawValue,
-            callback: {(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, refcon: UnsafeMutableRawPointer?)->Unmanaged<CGEvent>?  in
-
-                if startGlobalMotion{
-                    if interceptKey==interceptKeyEnum.next_pass{
-                        return nil
-                    }
-                    
-                    guard let nsEvent=NSEvent(cgEvent: event) else{
-                        startGlobalMotion=false
-                        return nil
-                    }
-                    for (k,v) in charDict{
-                        if v==nsEvent.characters{
-                            event.flags=CGEventFlags(rawValue: UInt64(k))
-                            break
-                        }
-                    }
-                    // esc esc，因为能设为空，esc 暂是影响最小的值了，就二级菜单可能用不了全局定位了
-                    let c = "\u{1B}"
-                    let utf16Chars = Array(c.utf16)
-                    event.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
-
-                    /*
-                    guard let nsEvent2=NSEvent(cgEvent: event) else{
-                        startGlobalMotion=false
-                        return nil
-                    }
-                    print(nsEvent2.characters)
-                    print(nsEvent2.modifierFlags.rawValue)
-                    */
-                }
-
-                return Unmanaged.passRetained(event)
-                
-                switch interceptKey{
-                case .pass:
-                    return Unmanaged.passRetained(event)
-                case .next_pass:
-                    interceptKey = .pass
-                    return nil
-                case .stop:
-                    return nil
-                }
-        },
-            userInfo: nil)!
-        
-        let runLoopSource:CFRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0);
-        
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, CFRunLoopMode.commonModes);
-        CGEvent.tapEnable(tap: eventTap, enable: true);
-        
-        CFRunLoopRun();
-    }
-    */
     
     /*
      func startDealKey(){
@@ -397,159 +325,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             clean()
             interceptKey=interceptKeyEnum.next_pass
         }
-        
-        printLog(Date().timeIntervalSince1970)
 
         let fieldList=parentWinCtrol.window?.contentView?.subviews as? [NSTextField]
-        for(key,value) in markDict{
+        for(key,_) in markDict{
             if !key.hasPrefix(char){
-                //value.controller.close()
-                
                 for field in fieldList!{
                     if field.stringValue==key{
                         field.removeFromSuperview()
                     }
                 }
-                //printLog(fieldList![0].removeFromSuperview())
-                
-                
             }
         }
-        printLog(Date().timeIntervalSince1970)
-
-        
     }
     
     func clean(){
-        printLog(Date().timeIntervalSince1970)
-        
-
         startGlobalMotion=false
         if markDict.count==0{
             return
         }
         printLog("clean")
         
-        for (_,value) in markDict{
-            //value.controller.close()
-            parentWinCtrol.close()
-        }
-        
-        printLog(Date().timeIntervalSince1970)
-        
-
-        /*
-         // 多线程关窗口，加速速度--但跟上面没啥速度差，2333
-         let group = DispatchGroup()
-         for (_,value) in markDict{
-         group.enter()
-         value.controller.close()
-         group.leave()
-         }
-         group.notify(queue: DispatchQueue.main) {
-         print("all clean window come back")
-         }
-         */
+        parentWinCtrol.close()
         
         markDict=[:]
         elementList = []
         inputingKey=""
     }
-    
-    /*ing
-    //let systemAXElement = AXUIElementCreateSystemWide()
+ 
     func dealCurrentActiveWindow(){
-        
-        printLog(Date().timeIntervalSince1970)
-        
-        let trusted = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
-        let privOptions = [trusted: false] as CFDictionary
-        let accessEnabled = AXIsProcessTrustedWithOptions(privOptions)
-        if !accessEnabled{
-            printLog("申请权限")
-            //模态化弹出
-            AXIsProcessTrustedWithOptions(privOptions)
-        }
-        
-        /* //此方法在进入二级界面可能失效，故用下面的 applescript 获取
-         err=AXUIElementCopyAttributeValue(systemAXElement, kAXFocusedApplicationAttribute as CFString, &elementTemp)
-         if err != AXError.success{
-         printLog(err)
-         return
-         }
-         applicationAXElement=elementTemp as! AXUIElement
-         */
-        
-        let pid=currentActiveAppPid()
-        if pid==0{
-            printLog("pid is 0")
-            return
-        }
-        applicationAXElement = AXUIElementCreateApplication(pid)
-        
-        // 标记所有项并存到一 map 中，标记字为 key，应该得遍历的方式，到底结束
-        //1、获取所有可选元素
-        // todo优化 暂只要标准窗口里的，不处理菜单--可能不止一个标准窗口,但取多个又有可能异常，有些隐藏的窗口也会算在这里，故只取第一个
-        let standardElementList=findStandardWindow(applicationAXElement)
-        if standardElementList==nil{
-            printLog("standardElementList nil")
-            return
-        }
-        for element in standardElementList!{
-            let (success,appRect)=elementFrame(element)
-            if !success{
-                return
-            }
-            getAllElement(element,appRect!)
-            break
-        }
-        printLog(elementList.count)
-        
-        printLog(Date().timeIntervalSince1970)
-
-        //2、26及以下只用单个词标记，以上根据 /26后的数量，如为3则用 a？ b？ c？ 加 d e f g h i j
-        let int=elementList.count/26
-        var i=0,j=0
-        var intTemp=int
-        for e in elementList{
-            if elementList.count<=26{
-                let key=charDict[j]!
-                let controller=markElement(e.rect,key)
-                markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
-                j+=1
-            }else{
-                //好麻烦，26以上直接先赋值单个的赋值，剩下再用双字母的
-                if intTemp != 26{
-                    let key=charDict[intTemp]!
-                    let controller=markElement(e.rect,key)
-                    markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
-                    intTemp+=1
-                }else{
-                    let key=charDict[i]!+charDict[j]!
-                    let controller=markElement(e.rect,key)
-                    markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
-                    j+=1
-                    if j==26{
-                        i+=1
-                        j=0
-                    }
-                }
-                
-            }
-        }
-        
-        printLog(Date().timeIntervalSince1970)
-        
-
-        //3、回头根据全局按键响应相应处理--在顶上
-        return
-    }
-    */
-    
-    func dealCurrentActiveWindow(){
-        
-        printLog(Date().timeIntervalSince1970)
-        
         let trusted = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
         let privOptions = [trusted: false] as CFDictionary
         let accessEnabled = AXIsProcessTrustedWithOptions(privOptions)
@@ -586,15 +389,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         printLog(elementList.count)
         
-        printLog(Date().timeIntervalSince1970)
-        
         //1.5、制作一父窗口
-        printLog(appRect)
         let width=appRect.width,height=appRect.height
         let x=appRect.minX
         let y=screenRect.width-appRect.maxY
         let parentWin=NSWindow(contentRect: NSRect(x: x, y: y, width: width, height: height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
- 
         parentWin.isOpaque=false
         parentWin.backgroundColor=NSColor.clear
         parentWin.level=NSWindow.Level.floating
@@ -606,20 +405,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for e in elementList{
             if elementList.count<=26{
                 let key=charDict[j]!
-                let controller=markElement(e.rect,key,appRect,parentWin)
-                markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
+                markElement(e.rect,key,appRect,parentWin)
+                markDict[key] = markStruct(element:e.element, rect:e.rect)
                 j+=1
             }else{
                 //好麻烦，26以上直接先赋值单个的赋值，剩下再用双字母的
                 if intTemp != 26{
                     let key=charDict[intTemp]!
-                    let controller=markElement(e.rect,key,appRect,parentWin)
-                    markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
+                    markElement(e.rect,key,appRect,parentWin)
+                    markDict[key] = markStruct(element:e.element,rect:e.rect)
                     intTemp+=1
                 }else{
                     let key=charDict[i]!+charDict[j]!
-                    let controller=markElement(e.rect,key,appRect,parentWin)
-                    markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
+                    markElement(e.rect,key,appRect,parentWin)
+                    markDict[key] = markStruct(element:e.element, rect:e.rect)
                     j+=1
                     if j==26{
                         i+=1
@@ -628,13 +427,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        
-        //parentWin.makeKeyAndOrderFront(parentWin)
         parentWinCtrol = NSWindowController(window: parentWin)
         parentWinCtrol.showWindow(self)
-        
-        printLog(Date().timeIntervalSince1970)
-        
         
         //3、回头根据全局按键响应相应处理--在顶上
         return
@@ -737,17 +531,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
     
-    func markElement(_ rect:NSRect,_ key:String,_ appRect:NSRect,_ parentWin:NSWindow)->NSWindowController{
+    func markElement(_ rect:NSRect,_ key:String,_ appRect:NSRect,_ parentWin:NSWindow){
         
         let width=CGFloat(30.0),height=CGFloat(20.0)
         let x=(rect.midX-appRect.minX)-width/2
         let y=appRect.maxY-rect.midY-height/2
-
-        /*
-         // 暂只是测试，把标记设为整块
+        /* // 暂只是测试，把标记设为整块
          let x=rect.minX
          let y=screenRect.width-rect.maxY
-         let win=NSWindow(contentRect: NSRect(x: x, y: y, width: rect.width, height: rect.height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
          */
         let field=NSTextField(frame: NSRect(x: x, y: y, width: width, height: height))
         field.backgroundColor=NSColor(calibratedRed: 1, green: 1, blue: 0, alpha: 0.6)
@@ -758,41 +549,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         field.alignment=NSTextAlignment.center
 
         parentWin.contentView?.addSubview(field)
+    }
 
-        return NSWindowController()
-    }
-    
-    /*ing
-    func markElement(_ rect:NSRect,_ key:String)->NSWindowController{
-        
-         let width=CGFloat(30.0),height=CGFloat(20.0)
-         let x=rect.midX-width/2
-         let y=screenRect.width-rect.midY-height/2
-         let win=NSWindow(contentRect: NSRect(x: x, y: y, width: width, height: height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
- 
-        /*
-        // 暂只是测试，把标记设为整块
-        let x=rect.minX
-        let y=screenRect.width-rect.maxY
-        let win=NSWindow(contentRect: NSRect(x: x, y: y, width: rect.width, height: rect.height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
-         */
-        let field=NSTextField(frame: win.frame)
-        field.backgroundColor=NSColor(calibratedRed: 1, green: 1, blue: 0, alpha: 0.6)
-        field.isEditable=false
-        field.isBezeled=false
-        field.stringValue=key
-        field.font=NSFont(name: "Monaco", size: 15.0)
-        field.alignment=NSTextAlignment.center
-        
-        win.contentView=field
-        win.backgroundColor=NSColor(calibratedRed: 0.5, green: 0.5, blue: 0.5, alpha: 0.5)
-        win.level=NSWindow.Level.floating
-        let controller = NSWindowController(window: win)
-        controller.showWindow(self)
-        return controller
-    }
- */
- 
     func debugAttribute(_ element:AXUIElement){
         var elementTemp: CFTypeRef?
         let vs=["AXTitle","AXHelp","AXRole","AXRoleDescription","AXDescription","AXFrame"]
