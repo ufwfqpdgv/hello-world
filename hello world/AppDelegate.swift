@@ -36,6 +36,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var markDict:[String:markStruct]=[:]
     var inputingKey=""
     var applicationAXElement = AXUIElementCreateSystemWide()
+    var parentWinCtrol = NSWindowController()
+
     // 频繁使用的变量
     var elementTemp: CFTypeRef?
     var err=AXError.success
@@ -398,9 +400,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         printLog(Date().timeIntervalSince1970)
 
+        let fieldList=parentWinCtrol.window?.contentView?.subviews as? [NSTextField]
         for(key,value) in markDict{
             if !key.hasPrefix(char){
-                value.controller.close()
+                //value.controller.close()
+                
+                for field in fieldList!{
+                    if field.stringValue==key{
+                        field.removeFromSuperview()
+                    }
+                }
+                //printLog(fieldList![0].removeFromSuperview())
+                
+                
             }
         }
         printLog(Date().timeIntervalSince1970)
@@ -409,7 +421,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func clean(){
-        
         printLog(Date().timeIntervalSince1970)
         
 
@@ -420,7 +431,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         printLog("clean")
         
         for (_,value) in markDict{
-            value.controller.close()
+            //value.controller.close()
+            parentWinCtrol.close()
         }
         
         printLog(Date().timeIntervalSince1970)
@@ -444,6 +456,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         inputingKey=""
     }
     
+    /*ing
     //let systemAXElement = AXUIElementCreateSystemWide()
     func dealCurrentActiveWindow(){
         
@@ -493,7 +506,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         printLog(elementList.count)
         
         printLog(Date().timeIntervalSince1970)
-        
 
         //2、26及以下只用单个词标记，以上根据 /26后的数量，如为3则用 a？ b？ c？ 加 d e f g h i j
         let int=elementList.count/26
@@ -529,6 +541,101 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         printLog(Date().timeIntervalSince1970)
         
 
+        //3、回头根据全局按键响应相应处理--在顶上
+        return
+    }
+    */
+    
+    func dealCurrentActiveWindow(){
+        
+        printLog(Date().timeIntervalSince1970)
+        
+        let trusted = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
+        let privOptions = [trusted: false] as CFDictionary
+        let accessEnabled = AXIsProcessTrustedWithOptions(privOptions)
+        if !accessEnabled{
+            printLog("申请权限")
+            //模态化弹出
+            AXIsProcessTrustedWithOptions(privOptions)
+        }
+        
+        let pid=currentActiveAppPid()
+        if pid==0{
+            printLog("pid is 0")
+            return
+        }
+        applicationAXElement = AXUIElementCreateApplication(pid)
+        
+        // 标记所有项并存到一 map 中，标记字为 key，应该得遍历的方式，到底结束
+        //1、获取所有可选元素
+        // todo优化 暂只要标准窗口里的，不处理菜单--可能不止一个标准窗口,但取多个又有可能异常，有些隐藏的窗口也会算在这里，故只取第一个
+        let standardElementList=findStandardWindow(applicationAXElement)
+        if standardElementList==nil{
+            printLog("standardElementList nil")
+            return
+        }
+        var appRect = NSRect()
+        for element in standardElementList!{
+            let (success,appRectTemp)=elementFrame(element)
+            if !success{
+                return
+            }
+            getAllElement(element,appRectTemp!)
+            appRect=appRectTemp!
+            break
+        }
+        printLog(elementList.count)
+        
+        printLog(Date().timeIntervalSince1970)
+        
+        //1.5、制作一父窗口
+        printLog(appRect)
+        let width=appRect.width,height=appRect.height
+        let x=appRect.minX
+        let y=screenRect.width-appRect.maxY
+        let parentWin=NSWindow(contentRect: NSRect(x: x, y: y, width: width, height: height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
+ 
+        parentWin.isOpaque=false
+        parentWin.backgroundColor=NSColor.clear
+        parentWin.level=NSWindow.Level.floating
+        
+        //2、26及以下只用单个词标记，以上根据 /26后的数量，如为3则用 a？ b？ c？ 加 d e f g h i j
+        let int=elementList.count/26
+        var i=0,j=0
+        var intTemp=int
+        for e in elementList{
+            if elementList.count<=26{
+                let key=charDict[j]!
+                let controller=markElement(e.rect,key,appRect,parentWin)
+                markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
+                j+=1
+            }else{
+                //好麻烦，26以上直接先赋值单个的赋值，剩下再用双字母的
+                if intTemp != 26{
+                    let key=charDict[intTemp]!
+                    let controller=markElement(e.rect,key,appRect,parentWin)
+                    markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
+                    intTemp+=1
+                }else{
+                    let key=charDict[i]!+charDict[j]!
+                    let controller=markElement(e.rect,key,appRect,parentWin)
+                    markDict[key] = markStruct(element:e.element, controller: controller,rect:e.rect)
+                    j+=1
+                    if j==26{
+                        i+=1
+                        j=0
+                    }
+                }
+            }
+        }
+        
+        //parentWin.makeKeyAndOrderFront(parentWin)
+        parentWinCtrol = NSWindowController(window: parentWin)
+        parentWinCtrol.showWindow(self)
+        
+        printLog(Date().timeIntervalSince1970)
+        
+        
         //3、回头根据全局按键响应相应处理--在顶上
         return
     }
@@ -619,27 +726,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return (true,rect)
     }
     
-    /*
-     // 优化，这里就已经取到 rect 了，之后可以不再取了
-     func onScreen(_ element:AXUIElement)->(Bool,NSRect?){
-     var elementTemp: CFTypeRef?
-     let err=AXUIElementCopyAttributeValue(element, "AXFrame" as CFString, &elementTemp)
-     if err != AXError.success{
-     return (false,nil)
-     }
-     
-     let axValue=elementTemp as! AXValue
-     var rect=NSRect.zero
-     AXValueGetValue(axValue, AXValueType.cgRect, &rect)
-     if rect.minX<=0 || rect.minY<=0 || rect.width==0||rect.height==0{
-     //if rect.minX<=0 || rect.width==0||rect.height==0{
-     return (false,nil)
-     }
-     
-     return (true,rect)
-     }
-     */
-    
     func standardWindow(_ element:AXUIElement)->Bool{
         err=AXUIElementCopyAttributeValue(element, "AXRole" as CFString, &elementTemp)
         if err == AXError.success{
@@ -651,37 +737,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
     
-    // 暂没用上
-    func findFocusedElement(_ applicationAXElement:AXUIElement)->AXUIElement?{
-        err=AXUIElementCopyAttributeValue(applicationAXElement, "AXChildren" as CFString, &elementTemp)
-        if err != AXError.success{
-            printLog(err)
-            return nil
-        }
-        let childrenList=elementTemp as! [AXUIElement]
-        printLog(childrenList.count)
-        for item in childrenList{
-            if checkIsFocusedElement(item){
-                return item
-            }else{
-                return findFocusedElement(item)
-            }
-        }
-        return nil
+    func markElement(_ rect:NSRect,_ key:String,_ appRect:NSRect,_ parentWin:NSWindow)->NSWindowController{
+        
+        let width=CGFloat(30.0),height=CGFloat(20.0)
+        let x=(rect.midX-appRect.minX)-width/2
+        let y=appRect.maxY-rect.midY-height/2
+
+        /*
+         // 暂只是测试，把标记设为整块
+         let x=rect.minX
+         let y=screenRect.width-rect.maxY
+         let win=NSWindow(contentRect: NSRect(x: x, y: y, width: rect.width, height: rect.height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
+         */
+        let field=NSTextField(frame: NSRect(x: x, y: y, width: width, height: height))
+        field.backgroundColor=NSColor(calibratedRed: 1, green: 1, blue: 0, alpha: 0.6)
+        field.isEditable=false
+        field.isBezeled=false
+        field.stringValue=key
+        field.font=NSFont(name: "Monaco", size: 15.0)
+        field.alignment=NSTextAlignment.center
+
+        parentWin.contentView?.addSubview(field)
+
+        return NSWindowController()
     }
     
-    // 暂没用上
-    func checkIsFocusedElement(_ element:AXUIElement)->Bool{
-        err=AXUIElementCopyAttributeValue(element, "AXFocused" as CFString, &elementTemp)
-        if err == AXError.success{
-            let focused=elementTemp as! Bool
-            if focused{
-                return true
-            }
-        }
-        return false
-    }
-    
+    /*ing
     func markElement(_ rect:NSRect,_ key:String)->NSWindowController{
         
          let width=CGFloat(30.0),height=CGFloat(20.0)
@@ -708,12 +789,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         win.level=NSWindow.Level.floating
         let controller = NSWindowController(window: win)
         controller.showWindow(self)
-        controller.close()
-        //win.makeKeyAndOrderFront(win)
-        //win.close()
         return controller
     }
-    
+ */
+ 
     func debugAttribute(_ element:AXUIElement){
         var elementTemp: CFTypeRef?
         let vs=["AXTitle","AXHelp","AXRole","AXRoleDescription","AXDescription","AXFrame"]
