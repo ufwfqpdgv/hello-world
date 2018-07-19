@@ -13,7 +13,7 @@ enum interceptKeyEnum {
     case next_pass //因如果直接 pass ，最后一字符还是会传到当前激活 app 中
     case stop
 }
-//todo interceptKey这个应该都没啥用，写完可以删掉
+// interceptKey这个应该都没啥用，写完可以删掉--另外一种快捷键处理用到，暂不管了
 var interceptKey = interceptKeyEnum.pass
 var startGlobalMotion=false
 let charDict = intCharList()
@@ -355,6 +355,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func dealCurrentActiveWindow(){
         let trusted = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
         let privOptions = [trusted: false] as CFDictionary
+        //let options : NSDictionary = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as NSString: true]
         let accessEnabled = AXIsProcessTrustedWithOptions(privOptions)
         if !accessEnabled{
             printLog("申请权限")
@@ -371,7 +372,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 标记所有项并存到一 map 中，标记字为 key，应该得遍历的方式，到底结束
         //1、获取所有可选元素
-        // todo优化 暂只要标准窗口里的，不处理菜单--可能不止一个标准窗口,但取多个又有可能异常，有些隐藏的窗口也会算在这里，故只取第一个
+        // 暂只要标准窗口里的，不处理菜单--可能不止一个标准窗口,但取多个又有可能异常，有些隐藏的窗口也会算在这里，故只取第一个
         let standardElementList=findStandardWindow(applicationAXElement)
         if standardElementList==nil{
             printLog("standardElementList nil")
@@ -383,6 +384,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if !success{
                 return
             }
+            printLog(appRectTemp)
             getAllElement(element,appRectTemp!)
             appRect=appRectTemp!
             break
@@ -459,18 +461,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func getAllElement(_ element:AXUIElement,_ appRect:NSRect){
         let (need1,_)=neededElementType(element)
         let (need2,rect)=onScreen(element,appRect)
+ 
+        if !need2{
+            return
+        }
+        
         if need1 && need2{
             elementList.append(elementStruct(element:element, rect: rect!))
             return
-        }
-        err=AXUIElementCopyAttributeValue(element, "AXChildren" as CFString, &elementTemp)
-        if err != AXError.success{
-            //printLog(err)
-            return
-        }
-        let childrenList=elementTemp as! [AXUIElement]
-        for item in childrenList{
-            getAllElement(item,appRect)
+        }else{
+            err=AXUIElementCopyAttributeValue(element, "AXChildren" as CFString, &elementTemp)
+            if err != AXError.success{
+                //printLog(err)
+                return
+            }
+            let childrenList=elementTemp as! [AXUIElement]
+            for item in childrenList{
+                getAllElement(item,appRect)
+            }
         }
     }
     
@@ -490,7 +498,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return (false,"")
     }
     
-    // todo优化 显示在当前激活窗口范围内才要--得细致到只在父窗口内，不然还是会显示多余（暂显示不错了，滚动条相关有些难处理，不影响使用）
+    // 显示在当前激活窗口范围内才要--得细致到只在父窗口内，不然还是会显示多余（暂显示不错了，滚动条相关有些难处理，不影响使用）--多余些没问题吧，要用的都能标记到就好
     func onScreen(_ element:AXUIElement,_ appRect:NSRect)->(Bool,NSRect?){
         let (success,rect)=elementFrame(element)
         if !success{
@@ -500,10 +508,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 判定还是有些问题，有些应该标记的窗口没标记上，xcode 的编辑框
         if (appRect.minX.isLessThanOrEqualTo((rect?.minX)!)) &&
             (rect?.minX.isLessThanOrEqualTo((appRect.maxX)))! &&
-            (appRect.minY.isLessThanOrEqualTo((rect?.minY)!)) &&
+            //(appRect.minY.isLessThanOrEqualTo((rect?.minY)!)) && //这个会导致滚动往下之后整个列表标记不到
             (rect?.minY.isLessThanOrEqualTo((appRect.maxY)))! {
             return (true,rect)
         }else{
+            printLog(rect)
+
             return (false,nil)
         }
     }
