@@ -86,10 +86,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(getModifier(_:)), name: NSNotification.Name("global_motion"), object: nil)
         */
         
-        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: {_ in
+        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown,.rightMouseUp], handler: {event in
             self.clean()
             interceptKey=interceptKeyEnum.pass
+            //self.dealMouseEvent(event) //被 BAB 拦截掉了，做不了
         })
+    }
+
+    var rightMouseDown:Bool=false
+    func dealMouseEvent(_ event:NSEvent){
+        switch event.type {
+        case .rightMouseDown:
+            rightMouseDown=true
+        case .rightMouseUp:
+            rightMouseDown=false
+        case .leftMouseDown:
+            if rightMouseDown{
+                printLog("触发")
+                rightMouseDown=false
+            }
+        default:
+            printLog("other")
+        }
     }
     
     func conversionChar(_ input:String)->String?{
