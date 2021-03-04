@@ -415,7 +415,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let y=screenRect.width-appRect.maxY
         let parentWin=NSWindow(contentRect: NSRect(x: x, y: y, width: width, height: height), styleMask: NSWindow.StyleMask.resizable, backing: NSWindow.BackingStoreType.buffered, defer: true)
         parentWin.isOpaque=false
-        parentWin.backgroundColor=NSColor.clear
+        parentWin.backgroundColor=NSColor.clear 
         parentWin.level=NSWindow.Level.floating
         
         //2、26及以下只用单个词标记，以上根据 /26后的数量，如为3则用 a？ b？ c？ 加 d e f g h i j
